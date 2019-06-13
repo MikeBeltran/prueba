@@ -201,7 +201,7 @@ CREATE TABLE procedimientos(
     procedimiento VARCHAR(50000),
     
     id_especialidad INT NOT NULL,
-    id_evaluacion INT NOT NULL
+    id_evaluacion INT NOT NULL,
     id_usuario INT NOT NULL,    
     
     UNIQUE (cita, id_especialidad, id_evaluacion),
