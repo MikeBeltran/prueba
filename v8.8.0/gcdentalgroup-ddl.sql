@@ -8,20 +8,6 @@ CREATE TABLE perfiles(
     acronimo char(2) UNIQUE NOT NULL #EMBEBIDO EN EL HC
 );
 
-#LA INFORMACION GUARDADA ACA PERMITE CONSTRUIR EL HC DE ACUERDO AL ANIO DE REGISTRO Y PERFIL DEL PACIENTE
-#CREATE TABLE identificadores (
-#    id int PRIMARY KEY NOT NULL AUTO_INCREMENT,
-#    anio char(2) NOT NULL ,
-#    id_perfil int(11) NOT NULL,
-#    correlativo int(4) NOT NULL, #AUTOINCREMENTABLE DE MANERA PROGRAMATICA
-#    
-#    id_paciente INT UNIQUE NOT NULL,
-#
-#    UNIQUE (anio, id_perfil, correlativo), #RESTRICCION, CON ELLO CADA HC CONTRUIDO (PROGRAMATICAMENTE) ES UNICO
-#    FOREIGN KEY (id_perfil) REFERENCES perfiles(id),
-#    FOREIGN KEY (id_paciente) REFERENCES pacientes(id)    
-#);
-
 ##################################################################################
 #INFORMACION BASICA DEL PACIENTE
 CREATE TABLE pacientes (
@@ -175,7 +161,7 @@ CREATE TABLE usuarios_permisos (
 #LAS EVALUACIONES SON UN PROCESO LARGO, ESTA TABLA UNE MUCHAS TABLAS
 CREATE TABLE evaluaciones(
 	id INT PRIMARY KEY AUTO_INCREMENT,
-    fecha DATETIME,
+    fecha DATETIME NOT NULL,
     estado_evaluacion ENUM('En Proceso', 'Finalizado'),
     #FECHA EN QUE SE CREO    
     #ESTADO DE DIAGNOSTICO, PLAN DE TRATAMIENTO, PROCEDIMIENTOS
@@ -192,13 +178,24 @@ CREATE TABLE especialidades(
     especialidad VARCHAR(35) NOT NULL UNIQUE
 );
 
+#USUARIO TIENE 0,1,* ESPECIALIDADES
+CREATE TABLE usuarios_especialidades(
+	id INT PRIMARY KEY AUTO_INCREMENT,
+    id_usuario INT NOT NULL,
+    id_especialidad INT NOT NULL,
+    
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id),
+    FOREIGN KEY (id_especialidad) REFERENCES especialidades(id),
+    UNIQUE (id_usuario, id_especialidad)
+);
+
 #EVALUACION TIENE 0,* PROCEDIMIENTOS
 #SE MANEJAN LOS PROCEDIMIENTOS POR ESPECIALIDAD (SIEMPRE PARA UN MISMO EVALUACION)
 CREATE TABLE procedimientos(
 	id INT PRIMARY KEY AUTO_INCREMENT,
-    cita INT NOT NULL, #CORRELATIVO NUMERICO
+    cita INT NOT NULL NOT NULL, #CORRELATIVO NUMERICO
     fecha_registro DATE NOT NULL,
-    procedimiento VARCHAR(50000),
+    procedimiento VARCHAR(50000) NOT NULL,
     
     id_especialidad INT NOT NULL,
     id_evaluacion INT NOT NULL,
@@ -440,19 +437,6 @@ CREATE TABLE fotos(
     FOREIGN KEY (id_diagnostico_implantologia) REFERENCES diagnosticos_implantologias(id)
 );
 ##################################################################################
-#DIAGNOSTICO DE IMPLANTOLOGIA TIENE 1,*? ODONTOGRAMAS
-#LA INFORMACION DE ESTA TABLA ES MUY AMPLIA, SE AGRUPADO LA INFORMACION EN OTRAS TABLAS PARA NORMALIZAR LA DB
-CREATE TABLE odontogramas(
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    fecha_reg DATE NOT NULL,
-    
-    id_diagnostico_implantologia INT NOT NULL, #UNIQUE?
-    id_usuario INT NOT NULL,
-    
-    FOREIGN KEY (id_diagnostico_implantologia) REFERENCES diagnosticos_implantologias(id),
-    FOREIGN KEY (id_usuario) REFERENCES usuarios(id)
-);
-##################################################################################
 #DIAGNOSTICO DE IMPLANTOLOGIA TIENE 1,*? PERIODONTOGRAMAS
 #LA INFORMACION DE ESTA TABLA ES MUY AMPLIA, SE AGRUPADO LA INFORMACION EN OTRAS TABLAS PARA NORMALIZAR LA DB
 CREATE TABLE periodontogramas(
@@ -673,4 +657,53 @@ CREATE TABLE fases_correctivas(
     FOREIGN KEY (id_plan_tratamiento) REFERENCES planes_tratamientos(id)
 );
 
+##################################################################################
+#TABLA CATALOGO
+CREATE TABLE descuentos_odontogramas_perfiles(
+	id INT PRIMARY KEY AUTO_INCREMENT,   
+    descuento DECIMAL(4,2) UNSIGNED NOT NULL, #PORCENTAJE
+	estado TINYINT(1) NOT NULL,
+	id_perfil INT NOT NULL,   
+     
+    FOREIGN KEY (id_perfil) REFERENCES perfiles(id)
+);
 
+#TABLA CATALOGO
+CREATE TABLE tratamientos_odontogramas(
+	id INT PRIMARY KEY AUTO_INCREMENT,
+    tratamiento VARCHAR(50) NOT NULL UNIQUE,
+    codigo VARCHAR(15) NOT NULL UNIQUE,
+    precio DECIMAL(6,2) UNSIGNED NOT NULL DEFAULT 0.00 
+);
+
+#EVALUACION TIENE 0,1 ODONTOGRAMA
+#UNA EVALUACION DEBERIA DE TENER A LO MAXIMO 2 ODONTOGRAMAS (EL DE REFERENCIA (EN CASO DE QUE TENGA) Y EL DE PRESUPUESTO)
+CREATE TABLE odontogramas(
+	id INT PRIMARY KEY AUTO_INCREMENT,    
+    fecha_creacion DATE NOT NULL,
+    tratamientos_piezas_descripcion JSON,
+    #tratamientos_piezas_grafico JSON, #PARA GUARDAR LOS DATOS GRAFICOS
+    tipo_odontograma ENUM('Diagnóstico','Tratamiento') NOT NULL,
+    
+    id_odontograma_referencia INT DEFAULT NULL, #CAMPO PUEDE APUNTAR AL ODONTOGRAMA DE DIAGNOSTICO O AL DE LA EVALUACION ANTERIOR DEL PACIENTE
+    id_evaluacion INT NOT NULL,
+    id_usuario INT NOT NULL,
+    
+    FOREIGN KEY (id_evaluacion) REFERENCES evaluaciones(id),
+    FOREIGN KEY (id_odontograma_referencia) REFERENCES odontogramas(id),
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id),
+    UNIQUE(tipo_odontograma, id_evaluacion),
+    CHECK (JSON_VALID(tratamientos_piezas_descripcion))
+);
+
+CREATE TABLE presupuestos_odontogramas(
+	id INT PRIMARY KEY AUTO_INCREMENT,
+    descuento_perfil DECIMAL(6,2) UNSIGNED NOT NULL,
+    #AVERIGUAR SI HAY OTRO TIPO DE DESCUENTOS
+    #AVERIGUAR SI EXISTEN OTROS COSTOS
+    precio_bruto DECIMAL(8,2) UNSIGNED NOT NULL,
+    precio_neto DECIMAL(8,2) UNSIGNED NOT NULL,    
+    id_odontograma INT NOT NULL UNIQUE,
+    
+    FOREIGN KEY (id_odontograma) REFERENCES odontogramas(id)
+);
